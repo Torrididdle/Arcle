@@ -1,0 +1,5 @@
+Set Arcle$Dir <Obey$Dir>
+IconSprites <Arcle$Dir>.!Sprites
+WimpSlot -min 256k -max 256k
+Dir <Arcle$Dir>
+Run <Arcle$Dir>.!RunImage

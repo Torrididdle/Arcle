@@ -1,0 +1,416 @@
+#include <stdio.h>
+#include "swis.h"
+#include <kernel.h>
+
+// SWI Registers
+_kernel_swi_regs inreg;
+_kernel_swi_regs outreg;
+
+// Hard coded - must match file sizes (or be greater).
+char answers[11545];
+char dict[64735];
+
+// Should be enough (famous last words)
+char textbuffer[16];
+
+int arclenum = 0;
+
+void display_mode(int mode, int height)
+{
+  int pitch;
+
+  inreg.r[0] = 22;
+  _kernel_swi(OS_WriteC,&inreg,&outreg);
+  inreg.r[0] = mode;
+  _kernel_swi(OS_WriteC,&inreg,&outreg);
+
+// I don't think we need these bits if we're not double buffering
+#if 0
+  // Seems to make things work
+  inreg.r[0] = -1;
+  inreg.r[1] = 6;
+  _kernel_swi(OS_ReadModeVariable, &inreg, &outreg);
+  pitch = outreg.r[2];
+
+  inreg.r[0] = 2; /* Screen area */
+  _kernel_swi(OS_ReadDynamicArea, &inreg, &outreg);
+  inreg.r[1] = (pitch * height * 2) - outreg.r[1];
+  if (_kernel_swi(OS_ChangeDynamicArea, &inreg, &outreg) != NULL)
+  {
+    printf("Couldn't OS_ChangeDynamicArea\n");
+    exit(0);
+  }
+#endif
+}
+
+void loadanswers(char* filename)
+{
+  int length;
+
+  inreg.r[0] = 5;
+  inreg.r[1] = (int) filename;
+  _kernel_swi(OS_File,&inreg,&outreg);
+
+  length = outreg.r[4];
+
+  if(length > sizeof(answers))
+  {
+      printf("File exceeds %d bytes (%d bytes) object type is %d\n",sizeof(answers),length,outreg.r[0]);
+      exit(0);
+  }
+
+  inreg.r[0] = 16;
+  inreg.r[1] = (int) filename;
+  inreg.r[2] = (int) answers;
+  inreg.r[3] = 0;
+
+  _kernel_swi(OS_File,&inreg,&outreg);
+}
+
+void loaddict(char* filename)
+{
+  int length;
+
+  inreg.r[0] = 5;
+  inreg.r[1] = (int) filename;
+  _kernel_swi(OS_File,&inreg,&outreg);
+
+  length = outreg.r[4];
+
+  if(length > sizeof(dict))
+  {
+      printf("File exceeds %d bytes (%d bytes) object type is %d\n",sizeof(dict),length,outreg.r[0]);
+      exit(0);
+  }
+
+  inreg.r[0] = 16;
+  inreg.r[1] = (int) filename;
+  inreg.r[2] = (int) dict;
+  inreg.r[3] = 0;
+
+  _kernel_swi(OS_File,&inreg,&outreg);
+}
+
+void loadarclenum(char* filename)
+{
+  int length;
+
+  inreg.r[0] = 5;
+  inreg.r[1] = (int) filename;
+  _kernel_swi(OS_File,&inreg,&outreg);
+
+  length = outreg.r[4];
+
+  if(length > sizeof(arclenum))
+  {
+      printf("File exceeds %d bytes (%d bytes) object type is %d\n",sizeof(arclenum),length,outreg.r[0]);
+      exit(0);
+  }
+
+  inreg.r[0] = 16;
+  inreg.r[1] = (int) filename;
+  inreg.r[2] = (int)&arclenum;
+  inreg.r[3] = 0;
+
+  _kernel_swi(OS_File,&inreg,&outreg);
+}
+
+void savearclenum(char* filename)
+{
+  inreg.r[0] = 10;
+  inreg.r[1] = (int) filename;
+  inreg.r[2] = 0xffd;
+  inreg.r[4] = (int)&arclenum;
+  inreg.r[5] = (int)&arclenum + (sizeof(arclenum));
+
+  _kernel_swi(OS_File,&inreg,&outreg);
+}
+
+
+int font_find(char* font, int height, int width)
+{
+  inreg.r[0] = 0;
+  inreg.r[1] = (int) font;
+  inreg.r[2] = height*16;
+  inreg.r[3] = width*16;
+  inreg.r[4] = 0;
+  inreg.r[5] = 0;
+  _kernel_swi(Font_FindFont,&inreg,&outreg);
+
+  return outreg.r[0];
+}
+
+void font_colour(int fg, int bg, int fonthandle)
+{
+  inreg.r[0] = fonthandle;
+  inreg.r[1] = bg;
+  inreg.r[2] = fg;
+  inreg.r[3] = 14;
+  _kernel_swi(ColourTrans_SetFontColours, &inreg, &outreg);
+}
+
+void draw_text(char* text, int x, int y, int fonthandle)
+{
+  inreg.r[0] = fonthandle;
+  inreg.r[1] = (int) text;
+  inreg.r[2] = 1 << 4;
+  inreg.r[3] = x;
+  inreg.r[4] = y;
+  inreg.r[5] = 0;
+  inreg.r[6] = 0;
+  inreg.r[7] = 0;
+  _kernel_swi(Font_Paint,&inreg,&outreg);
+}
+
+void graphics_colour(int setcolour)
+{
+  inreg.r[0] = setcolour;
+  inreg.r[1] = -1;
+  inreg.r[2] = 0;
+  _kernel_swi(ColourTrans_ReturnColourNumberForMode,&inreg,&outreg);
+  inreg.r[0] = 0;
+  inreg.r[1] = outreg.r[0];
+  _kernel_swi(OS_SetColour,&inreg,&outreg);
+}
+
+void draw_line(int x1,int y1,int x2,int y2)
+{
+  inreg.r[0] = 4;
+  inreg.r[1] = x1;
+  inreg.r[2] = y1;
+  _kernel_swi(OS_Plot,&inreg,&outreg);
+  inreg.r[0] = 5;
+  inreg.r[1] = x2;
+  inreg.r[2] = y2;
+  _kernel_swi(OS_Plot,&inreg,&outreg);
+}
+
+void draw_rectangle(int x1,int y1,int x2,int y2)
+{
+  draw_line(x1,y1,x1,y2);
+  draw_line(x1,y1,x2,y1);
+  draw_line(x2,y2,x2,y1);
+  draw_line(x2,y2,x1,y2);
+}
+
+void draw_rectangle_filled(int x1,int y1,int x2,int y2)
+{
+  inreg.r[0] = 96+4;
+  inreg.r[1] = x1;
+  inreg.r[2] = y1;
+  _kernel_swi(OS_Plot,&inreg,&outreg);
+  inreg.r[0] = 96+5;
+  inreg.r[1] = x2;
+  inreg.r[2] = y2;
+  _kernel_swi(OS_Plot,&inreg,&outreg);
+}
+
+int input_getchar()
+{
+    _kernel_swi(OS_ReadC,&inreg,&outreg);
+    return outreg.r[0];
+}
+
+void screen_clear()
+{
+  inreg.r[0] = 12;
+  _kernel_swi(OS_WriteC,&inreg,&outreg);
+}
+
+int main(int argc, char *argv[])
+{
+  int font = 0;
+  int boxx,boxy;
+  int i,guesslength;
+  char guess[6];
+  int finished = 0;
+  int dictmatch = 0;
+  int guessnum = 0;
+  int boxcolour = 0;
+  int greens = 0;
+  int usedguess[5] = {0,0,0,0,0};
+
+  display_mode(15,256);
+
+  printf("Loading dictionary...\n");
+  loaddict("dict");
+  printf("Loading answers...\n");
+  loadanswers("answers");
+  printf("Loading number...\n");
+  loadarclenum("arcnum");
+
+  screen_clear();
+
+  font = font_find("Corpus.Bold",32,20);
+  font_colour(0x00F00F00,0x00000000,font);
+  sprintf(textbuffer,"Arcle #%d",arclenum);
+  draw_text(textbuffer,25,900,font);
+
+  memset (guess,'\0',sizeof(guess));
+
+  for(boxx = 0; boxx < 5; boxx++)
+  {
+    for(boxy = 0; boxy < 6; boxy++)
+    {
+      graphics_colour(0xFFFFFF00);
+      draw_rectangle(25 + (boxx * 120),850 - (boxy * 120),125 + (boxx * 120),750 - (boxy * 120));
+    }
+  }
+
+  font_colour(0xFFFFFF00,0x00000000,font);
+  sprintf(textbuffer,"Guess:");
+  draw_text(textbuffer,650,500,font);
+
+  for(i = 0; i < 5; i++)
+  {
+    sprintf(textbuffer,"_");
+    draw_text(textbuffer,950 + (i * 60),500,font);
+  }
+
+  i = 1000;
+  guesslength = 0;
+
+  while(!finished)
+  {
+    char character;
+    while(1)
+    {
+      character = input_getchar();
+
+      graphics_colour(0x00000000);
+      draw_rectangle_filled(650,375,1250,470);
+
+      if(character == 13)
+        break;
+
+      if(character == 8)
+      {
+        if(guesslength <= 0)
+          continue;
+
+        guesslength--;
+        graphics_colour(0x00000000);
+        draw_rectangle_filled(945 + (guesslength * 60),440,950 + (guesslength * 60) + 50,560 + 50);
+
+        sprintf(textbuffer,"_");
+        draw_text(textbuffer,950 + (guesslength * 60),500,font);
+        continue;
+      }
+
+
+      if(guesslength >= 5)
+        continue;
+ 
+      guess[guesslength] = character;
+      
+      graphics_colour(0x00000000);
+      draw_rectangle_filled(945 + (guesslength * 60),440,950 + (guesslength * 60) + 50,560 + 50);
+      
+      sprintf(textbuffer,"%c",character);
+      draw_text(textbuffer,950 + (guesslength * 60),500,font);
+
+      guesslength++;
+    }
+
+      dictmatch = 0;
+
+      for(i = 0; i < sizeof(dict)/5; i++)
+      {
+        if(!memcmp(guess,dict + (i * 5),5))
+        {
+            dictmatch = 1;
+        }
+      }
+
+      for(i = 0; i < 5; i++)
+        usedguess[i] = 0;
+
+      if(!dictmatch)
+      {
+        font_colour(0x0000FF00,boxcolour,font);
+        sprintf(textbuffer,"Unknown word");
+        draw_text(textbuffer,650 ,400,font);
+        font_colour(0xFFFFFF00,boxcolour,font);
+      }else{
+          // Reset the guess input display
+          for(i = 0; i < 5; i++)
+          {
+            graphics_colour(0x00000000);
+            draw_rectangle_filled(945 + (i * 60),440,950 + (i * 60) + 60,560 + 50);
+            sprintf(textbuffer,"_");
+            draw_text(textbuffer,950 + (i * 60),500,font);
+          }
+
+          boxy = guessnum;
+
+          for(boxx = 0; boxx < 5; boxx++)
+          {
+            if(guess[boxx] == answers[(5 * arclenum) + boxx])
+            {
+              boxcolour = 0x00FF0000;
+              greens++;
+            }
+            else
+            {
+              // Non-matches are grey by default
+              boxcolour = 0x44444400;
+
+              for(i = 0; i < 5; i++)
+              {
+                  if(guess[boxx] == answers[(5 * arclenum) + i])  // If we have another one
+                    if(guess[i] != answers[(5 * arclenum) + i])   // Which isn't exact in itself
+                    {
+                      // Make sure we don't use the same letter twice for amber
+                      // (for example TRUST guess for CLOTH should one one amber T)
+                      if(usedguess[i] == 0)
+                      {
+                        boxcolour = 0x1EAEFC00;
+                        usedguess[i] = 1;
+                      }
+                    }
+              }
+            }
+
+            graphics_colour(boxcolour);
+            draw_rectangle_filled(25 + (boxx * 120),850 - (boxy * 120),125 + (boxx * 120),750 - (boxy * 120));
+        
+            graphics_colour(0xFFFFFF00);
+            draw_rectangle(25 + (boxx * 120),850 - (boxy * 120),125 + (boxx * 120),750 - (boxy * 120));
+
+            font_colour(0xFFFFFF00,boxcolour,font);
+            sprintf(textbuffer,"%c",guess[boxx]);
+            draw_text(textbuffer,25 + (boxx * 120) + 25,850 - (boxy * 120) - 65,font);
+          }
+
+          font_colour(0xFFFFFF00,0x00000000,font);
+
+          memset (guess,'\0',sizeof(guess));
+          guesslength = 0;
+          guessnum++;
+          if(greens >= 5)
+            finished = 1;
+          if(guessnum >= 6)
+            finished = 2;
+          greens = 0;
+      }
+  }
+
+  graphics_colour(0x22222200);
+  draw_rectangle_filled(50,400,1200,700);
+        
+  graphics_colour(0xFFFFFF00);
+  draw_rectangle(50,400,1200,700);
+
+  if(finished == 1)
+  {
+    font_colour(0xFFFFFF00,0x22222200,font);
+    sprintf(textbuffer,"Well done!");
+    draw_text(textbuffer,400,530,font);
+    arclenum++;
+    savearclenum("arcnum");
+  }else{
+    font_colour(0xFFFFFF00,0x22222200,font);
+    sprintf(textbuffer,"Better luck next time..");
+    draw_text(textbuffer,75,530,font);
+  }
+}

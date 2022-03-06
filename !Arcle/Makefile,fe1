@@ -1,0 +1,39 @@
+# Project:   Arcle
+
+
+# Toolflags:
+CCflags = -c -depend !Depend -IC: -throwback -w  
+C++flags = -c -depend !Depend -IC: -throwback
+Linkflags = -aif -o $@ 
+ObjAsmflags = -throwback -NoCache -depend !Depend
+CMHGflags = 
+LibFileflags = -c -o $@
+Squeezeflags = -o $@
+
+
+# Final targets:
+@.!RunImage:   @.o.Arcle C:o.stubs 
+        Link $(Linkflags) @.o.Arcle C:o.stubs 
+
+
+
+# User-editable dependencies:
+
+
+# Static dependencies:
+@.o.Arcle:   @.c.Arcle
+        cc $(ccflags) -o @.o.Arcle @.c.Arcle 
+
+
+
+# Dynamic dependencies:
+
+
+o.Arcle:	c.Arcle
+o.Arcle:	C:h.swis
+o.Arcle:	C:h.kernel
+o.Arcle:	C:h.kernel
+o.Arcle:	c.Arcle
+o.Arcle:	C:h.swis
+o.Arcle:	C:h.kernel
+o.Arcle:	C:h.kernel
