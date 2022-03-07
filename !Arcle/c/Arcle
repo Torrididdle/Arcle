@@ -217,6 +217,26 @@ void screen_clear()
   _kernel_swi(OS_WriteC,&inreg,&outreg);
 }
 
+int get_days_since_1jan1900()
+{
+  char datebuffer[5];
+  unsigned int date;
+
+  // Get centiseconds since 1 Jan 1900
+  datebuffer[0] = 3;
+  inreg.r[0] = 14;
+  inreg.r[1] = (int)datebuffer;
+  _kernel_swi(OS_Word,&inreg,&outreg);
+
+  // Drop a byte to get centiseconds/255 (so we can store in uint32)
+  date = datebuffer[1] + (datebuffer[2] << 8) + (datebuffer[3] << 16) + (datebuffer[4] << 24);
+
+  // Turn into days (there are 33750 255th-centiseconds in a day)
+  date = date / 33750;
+  return date;
+}
+
+
 int main(int argc, char *argv[])
 {
   int font = 0;
@@ -236,8 +256,20 @@ int main(int argc, char *argv[])
   loaddict("dict");
   printf("Loading answers...\n");
   loadanswers("answers");
-  printf("Loading number...\n");
-  loadarclenum("arcnum");
+
+  // Start 19th of June 2021 with 0
+  arclenum = get_days_since_1jan1900() - 44364;
+
+  // In case we have gone past Oct 2027 we can just loop
+  while(arclenum > 2309)
+    arclenum = arclenum - 2309;
+
+  // If we pre-date wordle (perhaps clock not set) go with what's on file
+  if(arclenum < 0)
+  {
+    printf("Loading number...\n");
+    loadarclenum("arcnum");
+  }
 
   screen_clear();
 
