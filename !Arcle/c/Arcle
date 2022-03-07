@@ -366,6 +366,7 @@ int main(int argc, char *argv[])
                       {
                         boxcolour = 0x1EAEFC00;
                         usedguess[i] = 1;
+                        i = 5;
                       }
                     }
               }
@@ -387,10 +388,11 @@ int main(int argc, char *argv[])
           memset (guess,'\0',sizeof(guess));
           guesslength = 0;
           guessnum++;
-          if(greens >= 5)
-            finished = 1;
+
           if(guessnum >= 6)
             finished = 2;
+          if(greens >= 5)
+            finished = 1;
           greens = 0;
       }
   }
