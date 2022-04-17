@@ -8,7 +8,7 @@ _kernel_swi_regs outreg;
 
 // Hard coded - must match file sizes (or be greater).
 char answers[11545];
-char dict[64735];
+char dict[64870];
 
 // Should be enough (famous last words)
 char textbuffer[16];
